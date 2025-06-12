@@ -1,0 +1,36 @@
+{
+  "name": "dsa-websocket-server",
+  "version": "1.0.0",
+  "description": "WebSocket server for live code collaboration with GraphQL subscriptions",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "websocket",
+    "graphql",
+    "subscriptions",
+    "code-collaboration",
+    "monaco-editor"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@apollo/server": "^4.9.5",
+    "@graphql-tools/schema": "^10.0.0",
+    "apollo-server-express": "^3.12.1",
+    "express": "^4.18.2",
+    "graphql": "^16.8.1",
+    "graphql-subscriptions": "^2.0.0",
+    "graphql-ws": "^5.14.2",
+    "ws": "^8.14.2",
+    "uuid": "^9.0.1",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+} 
