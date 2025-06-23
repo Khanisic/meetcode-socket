@@ -213,7 +213,9 @@ httpServer.listen(PORT, () => {
 
 async function startChallengeInBackend(cid) {
   try {
-    const res = await fetch('http://localhost:8081/graphql', {
+    const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8081/graphql';
+    console.log(`🌐 Making GraphQL request to: ${BACKEND_URL}`);
+    const res = await fetch(BACKEND_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

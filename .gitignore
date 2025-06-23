@@ -5,7 +5,7 @@
 *.md
 /examples
 
-
+.env
 
 /LICENSE
 /yarn.lock
