@@ -11,7 +11,7 @@ const wss = new WebSocketServer({ server: httpServer });
 const lobbies = new Map(); // cid => { players: Map<username, { ready: boolean, socket, running: boolean, testsPassed: number, submitted: boolean, submittedResults: number }> }
 
 wss.on('connection', (ws) => {
-  console.log('🔗 New WebSocket connection established');
+  console.log('🔗 New WebSocket connection established !!!!');
 
   ws.on('message', (message) => {
     try {
@@ -206,7 +206,7 @@ function broadcast(cid, message, excludeSocket = null) {
 }
 
 httpServer.listen(PORT, () => {
-  console.log(`🚀 WebSocket server running at ws://localhost:${PORT}`);
+  console.log(`🚀 WebSocket server running at wss://meetcode-socket-713cca73cbd1.herokuapp.com:${PORT}`);
   console.log(`📋 Active lobbies: ${lobbies.size}`);
 });
 
