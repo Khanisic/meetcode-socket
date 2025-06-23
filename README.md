@@ -1,388 +1,304 @@
-# DSA WebSocket Server for Live Code Collaboration
+# DSA Challenge WebSocket Server 🎯
 
-A real-time WebSocket server built with Node.js, Apollo Server, and GraphQL subscriptions for live code collaboration using Monaco Editor. This server provides real-time synchronization of code changes, typing indicators, cursor positions, and participant management without requiring a database.
+A GraphQL WebSocket server for real-time Data Structures & Algorithms (DSA) coding challenges with subscription support.
 
 ## Features
 
-- 🔄 **Real-time Code Synchronization**: Live code editing with conflict resolution
-- 👥 **Multi-user Collaboration**: Support for multiple participants in a session
-- ⌨️ **Typing Indicators**: Real-time typing status and cursor positions
-- 🎨 **User Customization**: Custom user colors and names
-- 📡 **GraphQL Subscriptions**: Real-time updates via WebSocket connections
-- 💾 **In-memory Storage**: No database required - all state managed in memory
-- 🌐 **Cross-platform**: Compatible with Next.js frontend and Spring Boot backend
-- 🚀 **Easy Integration**: Ready-to-use with Monaco Editor
+- 🚀 **Real-time subscriptions** for challenge events
+- 🎮 **Challenge management** (create, join, start, end)
+- 👥 **Multi-participant** support
+- 📊 **Live scoring** and ranking
+- 🔄 **Automatic lobby matching**
+- 📈 **Submission tracking** with real-time results
 
-## Architecture
+## Available Subscriptions
 
-```
-Frontend (Next.js + Monaco Editor)
-            ↕️ GraphQL WebSocket
-    WebSocket Server (Node.js + Apollo)
-            ↕️ GraphQL HTTP
-Backend (Spring Boot + GraphQL + PostgreSQL)
-```
+| Subscription | Triggered When | Payload |
+|--------------|---------------|---------|
+| `onPlayerJoined(cid)` | `joinChallenge()` is called | `Participant` |
+| `onChallengeStarted(cid)` | `startChallenge()` is called | `Challenge` |
+| `onSubmissionResult(cid)` | `submitSolution()` is called | `{ username, passed, score, time }` |
+| `onChallengeEnded(cid)` | `endChallenge()` is called | `Challenge` with participants |
 
-## Prerequisites
+## Quick Start
 
-- Node.js 18+ 
-- npm or yarn
-
-## Installation
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd dsa-websocket
-```
-
-2. Install dependencies:
+### 1. Install Dependencies
 ```bash
 npm install
 ```
 
-3. Start the development server:
+### 2. Start the Server
 ```bash
 npm run dev
 ```
 
-4. For production:
-```bash
-npm start
-```
+The server will start on `http://localhost:4000`
 
-The server will be available at:
-- GraphQL Endpoint: `http://localhost:4000/graphql`
-- WebSocket Endpoint: `ws://localhost:4000/graphql`
-- Health Check: `http://localhost:4000/health`
+### 3. Test the Server
+Open `test-client.html` in your browser to use the interactive test client.
 
-## GraphQL Schema
+## API Endpoints
 
-### Types
+- **GraphQL Playground**: `http://localhost:4000/graphql`
+- **WebSocket**: `ws://localhost:4000/graphql`
+- **Health Check**: `http://localhost:4000/health`
+- **API Info**: `http://localhost:4000/api/info`
 
-#### Session
-```graphql
-type Session {
-  id: ID!
-  code: String!
-  language: String!
-  participants: [User!]!
-  createdAt: String!
-  lastModified: String!
-}
-```
+## Example Usage
 
-#### User
-```graphql
-type User {
-  id: ID!
-  name: String!
-  color: String!
-  cursor: CursorPosition
-}
-```
-
-#### CodeChange
-```graphql
-type CodeChange {
-  sessionId: ID!
-  userId: ID!
-  userName: String!
-  change: String!
-  position: Int!
-  length: Int!
-  newText: String!
-  timestamp: String!
-}
-```
-
-### Operations
-
-#### Queries
-- `getSession(sessionId: ID!)`: Get session information
-- `getSessions`: Get all active sessions
-
-#### Mutations
-- `createSession(language: String)`: Create a new collaboration session
-- `joinSession(sessionId: ID!, userId: ID!, userName: String!, userColor: String)`: Join an existing session
-- `leaveSession(sessionId: ID!, userId: ID!)`: Leave a session
-- `updateCode(sessionId: ID!, userId: ID!, code: String!)`: Update session code
-- `sendCodeChange(...)`: Send incremental code changes
-- `setTypingStatus(...)`: Update typing indicators
-- `updateCursor(...)`: Update cursor position
-
-#### Subscriptions
-- `codeChanged(sessionId: ID!)`: Listen for code changes
-- `typingStatus(sessionId: ID!)`: Listen for typing indicators
-- `userConnection(sessionId: ID!)`: Listen for user join/leave events
-- `sessionUpdated(sessionId: ID!)`: Listen for session updates
-- `cursorMoved(sessionId: ID!)`: Listen for cursor movements
-
-## Frontend Integration (Next.js)
-
-Install required dependencies:
-```bash
-npm install @apollo/client graphql-ws
-```
-
-Setup Apollo Client with WebSocket support:
-
-```javascript
-import { ApolloClient, InMemoryCache, split, HttpLink } from '@apollo/client';
-import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
-import { getMainDefinition } from '@apollo/client/utilities';
-import { createClient } from 'graphql-ws';
-
-const httpLink = new HttpLink({
-  uri: 'http://localhost:4000/graphql'
-});
-
-const wsLink = new GraphQLWsLink(createClient({
-  url: 'ws://localhost:4000/graphql',
-}));
-
-const splitLink = split(
-  ({ query }) => {
-    const definition = getMainDefinition(query);
-    return (
-      definition.kind === 'OperationDefinition' &&
-      definition.operation === 'subscription'
-    );
-  },
-  wsLink,
-  httpLink,
-);
-
-export const client = new ApolloClient({
-  link: splitLink,
-  cache: new InMemoryCache()
-});
-```
-
-## Backend Integration (Spring Boot)
-
-Add dependencies to `pom.xml`:
-```xml
-<dependency>
-  <groupId>org.springframework</groupId>
-  <artifactId>spring-webflux</artifactId>
-</dependency>
-<dependency>
-  <groupId>com.fasterxml.jackson.core</groupId>
-  <artifactId>jackson-databind</artifactId>
-</dependency>
-```
-
-Create a GraphQL client service:
-```java
-@Service
-public class WebSocketGraphQLClient {
-    private final WebClient webClient;
-    
-    public WebSocketGraphQLClient() {
-        this.webClient = WebClient.builder()
-            .baseUrl("http://localhost:4000")
-            .build();
-    }
-    
-    // Implementation methods...
-}
-```
-
-See `examples/backend-integration.java` for complete implementation.
-
-## Usage Examples
-
-### Creating a Session
-
-```javascript
-// Frontend (React/Next.js)
-const [createSession] = useMutation(CREATE_SESSION);
-
-const handleCreateSession = async () => {
-  const { data } = await createSession({
-    variables: { language: 'javascript' }
-  });
-  const sessionId = data.createSession.id;
-  // Navigate to session or store session ID
-};
-```
-
-### Joining a Session
-
-```javascript
-const [joinSession] = useMutation(JOIN_SESSION);
-
-const handleJoinSession = async (sessionId, userId, userName) => {
-  const { data } = await joinSession({
-    variables: {
-      sessionId,
-      userId,
-      userName,
-      userColor: '#FF6B6B'
-    }
-  });
-  // User is now part of the session
-};
-```
-
-### Listening for Code Changes
-
-```javascript
-const { data } = useSubscription(CODE_CHANGED_SUBSCRIPTION, {
-  variables: { sessionId }
-});
-
-useEffect(() => {
-  if (data?.codeChanged) {
-    // Apply the code change to Monaco Editor
-    const change = data.codeChanged;
-    // Update editor content based on change
-  }
-}, [data]);
-```
-
-### Sending Code Changes
-
-```javascript
-const [sendCodeChange] = useMutation(SEND_CODE_CHANGE);
-
-const handleEditorChange = (value, event) => {
-  if (event.changes) {
-    event.changes.forEach(change => {
-      sendCodeChange({
-        variables: {
-          sessionId,
-          userId,
-          userName,
-          change: 'insert',
-          position: change.rangeOffset,
-          length: change.rangeLength,
-          newText: change.text
-        }
-      });
-    });
-  }
-};
-```
-
-## Configuration
-
-### Environment Variables
-
-```bash
-PORT=4000                    # Server port
-NODE_ENV=development         # Environment mode
-```
-
-### CORS Configuration
-
-The server is configured to accept connections from:
-- `http://localhost:3000` (Next.js frontend)
-- `http://localhost:8080` (Spring Boot backend)
-- `https://studio.apollographql.com` (Apollo Studio)
-
-To add more origins, modify the CORS configuration in `src/server.js`.
-
-## Testing
-
-### Using Apollo Studio
-
-1. Visit `https://studio.apollographql.com/sandbox`
-2. Set the endpoint to `http://localhost:4000/graphql`
-3. Try creating a session:
-
+### 1. Find or Create a Lobby
 ```graphql
 mutation {
-  createSession(language: "javascript") {
-    id
-    code
-    language
-    createdAt
+  findOrCreateLobby(username: "userOne") {
+    cid
+    pid
+    status
+    participants {
+      username
+      score
+      rank
+    }
   }
 }
 ```
 
-### Using curl
+### 2. Subscribe to Events
+```graphql
+# Subscribe to new players joining
+subscription {
+  onPlayerJoined(cid: "your-challenge-id") {
+    username
+    cid
+    score
+    time
+  }
+}
 
-```bash
-# Health check
-curl http://localhost:4000/health
-
-# Create session
-curl -X POST http://localhost:4000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"mutation { createSession(language: \"javascript\") { id code language } }"}'
+# Subscribe to challenge starting
+subscription {
+  onChallengeStarted(cid: "your-challenge-id") {
+    cid
+    status
+    startDate
+    participants {
+      username
+      score
+    }
+  }
+}
 ```
 
-## Architecture Decisions
-
-### Why In-Memory Storage?
-- **Simplicity**: No database setup required
-- **Performance**: Faster operations for real-time collaboration
-- **Scalability**: Can be replaced with Redis for multi-instance deployments
-- **Development**: Easier to set up and test
-
-### Why GraphQL Subscriptions?
-- **Real-time**: Native WebSocket support for live updates
-- **Type Safety**: Strong typing for all operations
-- **Flexibility**: Clients can subscribe to specific events they need
-- **Integration**: Easy integration with Apollo Client ecosystem
-
-### Session Cleanup
-- Sessions are automatically cleaned up after 1 hour of inactivity
-- No participants = session marked for deletion
-- Cleanup runs every hour to prevent memory leaks
-
-## Deployment
-
-### Docker
-
-Create a `Dockerfile`:
-
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY src ./src
-EXPOSE 4000
-CMD ["npm", "start"]
+### 3. Start a Challenge
+```graphql
+mutation {
+  startChallenge(cid: "your-challenge-id") {
+    cid
+    status
+    startDate
+    participants {
+      username
+      score
+    }
+  }
+}
 ```
 
-Build and run:
-```bash
-docker build -t dsa-websocket .
-docker run -p 4000:4000 dsa-websocket
+### 4. Submit a Solution
+```graphql
+mutation {
+  submitSolution(
+    cid: "your-challenge-id"
+    username: "userOne"
+    code: "public int[] twoSum(int[] nums, int target) { return new int[]{0,1}; }"
+  ) {
+    username
+    passed
+    score
+    time
+  }
+}
 ```
 
-### Production Considerations
+### 5. End a Challenge
+```graphql
+mutation {
+  endChallenge(
+    cid: "your-challenge-id"
+    participantScores: [
+      { username: "userOne", score: 150, rank: 1 },
+      { username: "userTwo", score: 120, rank: 2 }
+    ]
+  ) {
+    cid
+    status
+    endDate
+    participants {
+      username
+      score
+      rank
+    }
+  }
+}
+```
 
-1. **Redis for Scaling**: Replace in-memory storage with Redis for multi-instance deployments
-2. **Rate Limiting**: Add rate limiting for API endpoints
-3. **Authentication**: Implement JWT token validation
-4. **Monitoring**: Add logging and metrics collection
-5. **Load Balancing**: Use sticky sessions for WebSocket connections
+## Schema Types
 
-## Contributing
+### Core Types
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+```graphql
+type Challenge {
+  cid: ID!
+  pid: String!
+  status: String!
+  startDate: String
+  endDate: String
+  participants: [Participant!]
+}
+
+type Participant {
+  username: String!
+  cid: ID!
+  rank: Int
+  score: Int!
+  time: String!
+}
+
+type SubmissionResult {
+  username: String!
+  passed: Boolean!
+  score: Int!
+  time: String!
+}
+```
+
+### Available Queries
+
+- `getAllChallenges`: Get all challenges
+- `getChallengeById(cid)`: Get specific challenge
+- `getOpenChallenges`: Get waiting lobbies
+- `getUserChallengeHistory(username)`: Get user's challenge history
+- `isParticipantInChallenge(cid, username)`: Check participation
+
+### Available Mutations
+
+- `findOrCreateLobby(username)`: Find existing lobby or create new one
+- `joinChallenge(cid, username)`: Join a specific challenge
+- `startChallenge(cid)`: Start a challenge
+- `submitSolution(cid, username, code)`: Submit solution for testing
+- `endChallenge(cid, participantScores)`: End challenge with final scores
+
+## WebSocket Client Integration
+
+### JavaScript (Browser)
+```javascript
+import { createClient } from 'graphql-ws';
+
+const client = createClient({
+  url: 'ws://localhost:4000/graphql',
+});
+
+// Subscribe to events
+const subscription = client.subscribe({
+  query: `subscription {
+    onPlayerJoined(cid: "challenge-id") {
+      username
+      score
+    }
+  }`
+}, {
+  next: (data) => console.log('New player joined:', data),
+  error: (err) => console.error('Subscription error:', err),
+  complete: () => console.log('Subscription ended')
+});
+```
+
+### React Hook Example
+```javascript
+import { useSubscription } from '@apollo/client';
+
+function ChallengeRoom({ challengeId }) {
+  const { data } = useSubscription(
+    gql`
+      subscription OnPlayerJoined($cid: ID!) {
+        onPlayerJoined(cid: $cid) {
+          username
+          score
+          time
+        }
+      }
+    `,
+    { variables: { cid: challengeId } }
+  );
+
+  return (
+    <div>
+      {data && <p>New player: {data.onPlayerJoined.username}</p>}
+    </div>
+  );
+}
+```
+
+## Challenge Flow
+
+1. **Lobby Phase**: Users call `findOrCreateLobby()` to join waiting rooms
+2. **Joining**: Additional users can `joinChallenge()` existing lobbies
+3. **Starting**: When ready, call `startChallenge()` to begin
+4. **Active Phase**: Participants `submitSolution()` with their code
+5. **Ending**: Call `endChallenge()` with final scores and rankings
+
+## Real-time Events
+
+All mutations automatically trigger corresponding subscriptions:
+
+- `joinChallenge()` → `onPlayerJoined` subscription fires
+- `startChallenge()` → `onChallengeStarted` subscription fires  
+- `submitSolution()` → `onSubmissionResult` subscription fires
+- `endChallenge()` → `onChallengeEnded` subscription fires
+
+## Development
+
+### Project Structure
+```
+src/
+├── server.ts        # Main server setup
+├── schema.js        # GraphQL schema definition
+├── resolvers.js     # Query/Mutation/Subscription resolvers
+└── store.js         # In-memory data store
+```
+
+### Scripts
+- `npm run dev`: Start development server with nodemon
+- `npm start`: Start production server
+
+### Test Client
+The included `test-client.html` provides a full-featured test interface for:
+- Connecting to WebSocket
+- Managing challenges
+- Testing all mutations
+- Viewing real-time subscription events
+- Monitoring connection status
+
+## CORS Configuration
+
+The server is configured to accept connections from:
+- `http://localhost:3000` (React/Next.js)
+- `http://localhost:3001` (Alternative frontend)
+- `https://studio.apollographql.com` (Apollo Studio)
+- Custom domains (configurable)
+
+## Production Deployment
+
+1. Set `PORT` environment variable
+2. Update CORS origins for your domain
+3. Replace in-memory store with persistent database
+4. Add authentication/authorization
+5. Implement rate limiting
+6. Add monitoring and logging
 
 ## License
 
-MIT License - see LICENSE file for details.
-
-## Support
-
-For issues and questions:
-- Create an issue in the GitHub repository
-- Check existing documentation and examples
-- Review the GraphQL schema for available operations
+MIT
 
 ---
 
-**Happy Coding!** 🚀 
+**Ready to code some algorithms! 🚀** 
