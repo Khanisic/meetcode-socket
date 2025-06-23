@@ -27,14 +27,32 @@ A GraphQL WebSocket server for real-time Data Structures & Algorithms (DSA) codi
 npm install
 ```
 
-### 2. Start the Server
+### 2. Configure Environment Variables
+Copy the example environment file and configure your settings:
+```bash
+cp env.example .env
+```
+
+Edit `.env` with your configuration:
+```bash
+# WebSocket Server Configuration
+PORT=4000
+
+# Backend GraphQL API URL
+BACKEND_URL=http://localhost:8081/graphql
+
+# Optional: Environment
+NODE_ENV=development
+```
+
+### 3. Start the Server
 ```bash
 npm run dev
 ```
 
-The server will start on `http://localhost:4000`
+The server will start on `http://localhost:4000` (or your configured PORT)
 
-### 3. Test the Server
+### 4. Test the Server
 Open `test-client.html` in your browser to use the interactive test client.
 
 ## API Endpoints

@@ -213,7 +213,7 @@ httpServer.listen(PORT, () => {
 
 async function startChallengeInBackend(cid) {
   try {
-    const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8081/graphql';
+    const BACKEND_URL = 'https://meetcode-backend.onrender.com/graphql';
     console.log(`🌐 Making GraphQL request to: ${BACKEND_URL}`);
     const res = await fetch(BACKEND_URL, {
       method: 'POST',
