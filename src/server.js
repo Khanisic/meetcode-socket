@@ -1,23 +1,16 @@
-// ✅ server.js — Enhanced WebSocket Server for Battle Mode with Timer & End Challenge
+
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import fetch from 'node-fetch';
 
 const PORT = process.env.PORT || 4000;
-const BACKEND_URL = "https://meetcode-backend.onrender.com/graphql";
+const BACKEND_URL = "http://localhost:8081/graphql";
 const httpServer = createServer();
 const wss = new WebSocketServer({ server: httpServer });
 
-// Store player info per challenge ID
-const lobbies = new Map(); // cid => { 
-//   players: Map<username, { ready: boolean, socket, running: boolean, testsPassed: number, submitted: boolean, submittedResults: number, latestScore: number }>,
-//   timer: { startTime: Date, endTime: Date, intervalId: NodeJS.Timeout },
-//   status: 'WAITING' | 'IN_PROGRESS' | 'ENDED',
-//   challengeEnded: boolean
-// }
+const lobbies = new Map();
 
-// Timer duration in milliseconds (15 minutes)
-const CHALLENGE_DURATION = 5 * 60 * 1000;
+const CHALLENGE_DURATION = 15 * 60 * 1000;
 
 wss.on('connection', (ws) => {
   console.log('🔗 New WebSocket connection established !!!!');
@@ -29,7 +22,6 @@ wss.on('connection', (ws) => {
 
       if (!cid || !username) return;
 
-      // Check if challenge exists and is valid for joining
       if (type === 'join') {
         const challengeValid = await validateChallengeAccess(cid, username);
         if (!challengeValid.canJoin) {
@@ -93,11 +85,25 @@ wss.on('connection', (ws) => {
             submittedTestsPassed: playerData.submittedTestsPassed || 0
           }));
 
-          const timerInfo = lobby.timer ? {
-            startTime: lobby.timer.startTime,
-            endTime: lobby.timer.endTime,
-            remainingTime: Math.max(0, lobby.timer.endTime - Date.now())
-          } : null;
+          // Always provide timer info if challenge is in progress, even if timer object is temporarily null
+          let timerInfo = null;
+          if (lobby.timer) {
+            timerInfo = {
+              startTime: lobby.timer.startTime,
+              endTime: lobby.timer.endTime,
+              remainingTime: Math.max(0, lobby.timer.endTime - Date.now())
+            };
+          } else if (lobby.status === 'IN_PROGRESS') {
+            // Challenge is in progress but timer object not set yet (race condition)
+            // Provide minimal timer info to indicate challenge is active
+            const now = Date.now();
+            timerInfo = {
+              startTime: now,
+              endTime: now + CHALLENGE_DURATION,
+              remainingTime: CHALLENGE_DURATION,
+              isEstimated: true // Flag to indicate this is estimated
+            };
+          }
 
           ws.send(JSON.stringify({
             type: 'lobbyState',
