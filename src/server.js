@@ -33,10 +33,11 @@ wss.on('connection', (ws) => {
         }
       }
 
-      if (!lobbies.has(cid)) {
-        lobbies.set(cid, {
+            if (!lobbies.has(cid)) {
+        lobbies.set(cid, { 
           players: new Map(),
           completedPlayers: new Map(), // Store players who finished early
+          disconnectedPlayers: new Map(), // Store temporarily disconnected players with timers
           timer: null,
           status: 'WAITING',
           challengeEnded: false
@@ -55,18 +56,46 @@ wss.on('connection', (ws) => {
         return;
       }
 
-      // Ensure the player is tracked
-      if (!lobby.players.has(username)) {
-        lobby.players.set(username, {
-          ready: false,
-          socket: ws,
-          running: false,
-          testsPassed: 0,
-          submitted: false,
-          submittedResults: 0,
-          submittedTestsPassed: 0, // Number of tests passed on submission
-          latestScore: 0
-        });
+            // Check if player is reconnecting (was temporarily disconnected)
+      if (lobby.disconnectedPlayers.has(username)) {
+        console.log(`🔄 Player "${username}" reconnecting to lobby: ${cid}`);
+        const disconnectedPlayer = lobby.disconnectedPlayers.get(username);
+        
+        // Cancel the disconnect timer
+        if (disconnectedPlayer.disconnectTimer) {
+          clearTimeout(disconnectedPlayer.disconnectTimer);
+          console.log(`⏰ Cancelled disconnect timer for "${username}"`);
+        }
+        
+        // Restore the player with their previous data but new socket
+        disconnectedPlayer.playerData.socket = ws;
+        lobby.players.set(username, disconnectedPlayer.playerData);
+        lobby.disconnectedPlayers.delete(username);
+        
+        // Notify others that player reconnected
+        broadcast(cid, {
+          type: 'playerReconnected',
+          player: { username, cid }
+        }, ws);
+        
+        console.log(`✅ Player "${username}" successfully reconnected to lobby: ${cid}`);
+      } else {
+        // Ensure the player is tracked (new player)
+        if (!lobby.players.has(username)) {
+          lobby.players.set(username, { 
+            ready: false, 
+            socket: ws, 
+            running: false, 
+            testsPassed: 0, 
+            submitted: false, 
+            submittedResults: 0,
+            submittedTestsPassed: 0, // Number of tests passed on submission
+            latestScore: 0
+          });
+        } else {
+          // Update socket for existing player
+          lobby.players.get(username).socket = ws;
+        }
       }
 
       switch (type) {
@@ -295,7 +324,7 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     console.log('🔌 WebSocket connection closed');
-    handlePlayerDisconnect(ws);
+    schedulePlayerDisconnect(ws);
   });
 });
 
@@ -490,13 +519,104 @@ async function endChallenge(cid, reason) {
 
   // Clean up lobby after a delay
   setTimeout(() => {
+    const lobby = lobbies.get(cid);
+    if (lobby) {
+      // Clear any remaining disconnect timers
+      for (const [username, disconnectedPlayer] of lobby.disconnectedPlayers.entries()) {
+        if (disconnectedPlayer.disconnectTimer) {
+          clearTimeout(disconnectedPlayer.disconnectTimer);
+          console.log(`🧹 Cleared disconnect timer for "${username}" during lobby cleanup`);
+        }
+      }
+    }
     lobbies.delete(cid);
     console.log(`🗑️ Cleaned up lobby: ${cid}`);
   }, 30000); // Keep lobby for 30 seconds for final data
 }
 
-// Handle player disconnect
-function handlePlayerDisconnect(ws) {
+// Schedule player disconnect with 5-second grace period
+function schedulePlayerDisconnect(ws) {
+  for (const [cid, lobby] of lobbies.entries()) {
+    for (const [username, player] of lobby.players.entries()) {
+      if (player.socket === ws) {
+        console.log(`⏳ Player "${username}" disconnected from lobby: ${cid}, starting 5-second grace period...`);
+
+        // Move player to disconnected players with their data
+        const playerData = { ...player };
+        const disconnectTimer = setTimeout(() => {
+          console.log(`⏰ Grace period expired for "${username}", permanently disconnecting...`);
+          handlePlayerDisconnect(username, cid);
+        }, 5000); // 5-second grace period
+
+        lobby.disconnectedPlayers.set(username, {
+          playerData,
+          disconnectTimer,
+          disconnectedAt: Date.now()
+        });
+
+        // Remove from active players but don't notify others yet
+        lobby.players.delete(username);
+        
+        // Notify others that player is temporarily disconnected
+        broadcast(cid, {
+          type: 'playerDisconnected',
+          player: { username, cid },
+          temporary: true,
+          gracePeriod: 5000
+        });
+
+        return;
+      }
+    }
+  }
+}
+
+// Handle player disconnect (after grace period or immediate for cleanup)
+function handlePlayerDisconnect(username, cid) {
+  const lobby = lobbies.get(cid);
+  if (!lobby) return;
+
+  console.log(`👋 User "${username}" permanently disconnected from lobby: ${cid}`);
+
+  // Remove from disconnected players if they're there
+  if (lobby.disconnectedPlayers.has(username)) {
+    const disconnectedPlayer = lobby.disconnectedPlayers.get(username);
+    if (disconnectedPlayer.disconnectTimer) {
+      clearTimeout(disconnectedPlayer.disconnectTimer);
+    }
+    lobby.disconnectedPlayers.delete(username);
+  }
+
+  // If challenge is in progress and user disconnects, use their latest score
+  if (lobby.status === 'IN_PROGRESS' && !lobby.challengeEnded) {
+    console.log(`📊 Recording final score for disconnected user "${username}"`);
+  }
+
+  console.log(`📊 Lobby ${cid} now has ${lobby.players.size} active player(s) and ${lobby.disconnectedPlayers.size} temporarily disconnected`);
+
+  // Check if lobby should be ended or cleaned up
+  const totalPlayers = lobby.players.size + lobby.disconnectedPlayers.size;
+  
+  // If no players left (active or disconnected) and challenge was in progress, end it
+  if (totalPlayers === 0 && lobby.status === 'IN_PROGRESS' && !lobby.challengeEnded) {
+    console.log(`🏁 All players disconnected from ${cid}, ending challenge`);
+    endChallenge(cid, 'All players disconnected');
+  } else if (totalPlayers === 0 && lobby.status === 'WAITING') {
+    // Clean up empty waiting lobbies
+    lobbies.delete(cid);
+    console.log(`🗑️ Empty waiting lobby ${cid} removed`);
+  } else if (lobby.players.size > 0) {
+    // Notify remaining active players
+    broadcast(cid, {
+      type: 'playerLeft',
+      player: { username, cid },
+      permanent: true
+    });
+  }
+}
+
+// Original handlePlayerDisconnect function (kept for legacy WebSocket-based cleanup)
+function handlePlayerDisconnectLegacy(ws) {
   for (const [cid, lobby] of lobbies.entries()) {
     for (const [username, player] of lobby.players.entries()) {
       if (player.socket === ws) {
@@ -515,9 +635,13 @@ function handlePlayerDisconnect(ws) {
           console.log(`🏁 All players disconnected from ${cid}, ending challenge`);
           endChallenge(cid, 'All players disconnected');
         } else if (lobby.players.size === 0 && lobby.status === 'WAITING') {
-          // Clean up empty waiting lobbies
-          lobbies.delete(cid);
-          console.log(`🗑️ Empty waiting lobby ${cid} removed`);
+          // Clean up empty waiting lobbies (but only if no disconnected players either)
+          if (lobby.disconnectedPlayers.size === 0) {
+            lobbies.delete(cid);
+            console.log(`🗑️ Empty waiting lobby ${cid} removed`);
+          } else {
+            console.log(`⏳ Waiting lobby ${cid} has ${lobby.disconnectedPlayers.size} disconnected players, keeping alive`);
+          }
         } else if (lobby.players.size > 0) {
           // Notify remaining players
           broadcast(cid, {
