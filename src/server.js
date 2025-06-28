@@ -17,7 +17,7 @@ const lobbies = new Map(); // cid => {
 // }
 
 // Timer duration in milliseconds (15 minutes)
-const CHALLENGE_DURATION = 5 * 60 * 1000;
+const CHALLENGE_DURATION = 15 * 60 * 1000;
 
 wss.on('connection', (ws) => {
   console.log('🔗 New WebSocket connection established !!!!');
