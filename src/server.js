@@ -1,4 +1,3 @@
-
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import fetch from 'node-fetch';
@@ -33,16 +32,19 @@ wss.on('connection', (ws) => {
         }
       }
 
-            if (!lobbies.has(cid)) {
+      if (!lobbies.has(cid)) {
         lobbies.set(cid, { 
           players: new Map(),
           completedPlayers: new Map(), // Store players who finished early
           disconnectedPlayers: new Map(), // Store temporarily disconnected players with timers
           timer: null,
           status: 'WAITING',
-          challengeEnded: false
+          challengeEnded: false,
+          inactivityTimer: null // 3-min inactivity timer
         });
         console.log(`🏠 Created new lobby: ${cid}`);
+        // Start inactivity timer
+        resetLobbyInactivityTimer(cid);
       }
 
       const lobby = lobbies.get(cid);
@@ -56,7 +58,7 @@ wss.on('connection', (ws) => {
         return;
       }
 
-            // Check if player is reconnecting (was temporarily disconnected)
+      // Check if player is reconnecting (was temporarily disconnected)
       if (lobby.disconnectedPlayers.has(username)) {
         console.log(`🔄 Player "${username}" reconnecting to lobby: ${cid}`);
         const disconnectedPlayer = lobby.disconnectedPlayers.get(username);
@@ -93,10 +95,12 @@ wss.on('connection', (ws) => {
             latestScore: 0
           });
         } else {
-          // Update socket for existing player
           lobby.players.get(username).socket = ws;
         }
       }
+
+      // Reset inactivity timer
+      resetLobbyInactivityTimer(cid);
 
       switch (type) {
         case 'join':
@@ -423,7 +427,7 @@ function startChallengeTimer(cid) {
   }, CHALLENGE_DURATION);
 }
 
-// End challenge function
+
 async function endChallenge(cid, reason) {
   const lobby = lobbies.get(cid);
   if (!lobby || lobby.challengeEnded) return;
@@ -433,15 +437,14 @@ async function endChallenge(cid, reason) {
   lobby.challengeEnded = true;
   lobby.status = 'ENDED';
 
-  // Clear timer
+
   if (lobby.timer?.intervalId) {
     clearInterval(lobby.timer.intervalId);
   }
 
-  // Calculate participant scores - combine active and completed players
   const participantScores = [];
 
-  // Get all players (active + completed)
+
   const allPlayers = [
     ...Array.from(lobby.players.entries()).map(([username, playerData]) => ({
       username,
@@ -635,7 +638,7 @@ function handlePlayerDisconnectLegacy(ws) {
           console.log(`🏁 All players disconnected from ${cid}, ending challenge`);
           endChallenge(cid, 'All players disconnected');
         } else if (lobby.players.size === 0 && lobby.status === 'WAITING') {
-          // Clean up empty waiting lobbies (but only if no disconnected players either)
+
           if (lobby.disconnectedPlayers.size === 0) {
             lobbies.delete(cid);
             console.log(`🗑️ Empty waiting lobby ${cid} removed`);
@@ -713,5 +716,31 @@ async function startChallengeInBackend(cid) {
 
   } catch (err) {
     console.error(`❌ Failed to start challenge for ${cid}:`, err);
+  }
+}
+
+
+function resetLobbyInactivityTimer(cid) {
+  const lobby = lobbies.get(cid);
+  if (!lobby) return;
+  if (lobby.inactivityTimer) {
+    clearTimeout(lobby.inactivityTimer);
+  }
+ 
+  if (lobby.status === 'WAITING') {
+    lobby.inactivityTimer = setTimeout(() => {
+      if (lobby.status === 'WAITING') {
+        console.log(`⏰ Lobby ${cid} closed due to inactivity (3 minutes)`);
+        for (const { socket } of lobby.players.values()) {
+          if (socket.readyState === socket.OPEN) {
+            socket.send(JSON.stringify({
+              type: 'lobbyClosed',
+              reason: 'Lobby closed due to inactivity (no challenge started)'
+            }));
+          }
+        }
+        lobbies.delete(cid);
+      }
+    }, 3 * 60 * 1000); 
   }
 }
