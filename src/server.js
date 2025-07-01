@@ -3,7 +3,7 @@ import { WebSocketServer } from 'ws';
 import fetch from 'node-fetch';
 
 const PORT = process.env.PORT || 4000;
-const BACKEND_URL = "http://localhost:8081/graphql";
+const BACKEND_URL = "https://meetcode-backend.onrender.com/graphql";
 const httpServer = createServer();
 const wss = new WebSocketServer({ server: httpServer });
 
